@@ -1,12 +1,13 @@
-name: Build APK
+name: Build Anambra Community Alert APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build Flutter Release APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,24 +24,28 @@ jobs:
         with:
           channel: stable
 
-      - name: Fix V1 Embedding and Android Scaffolding
+      - name: Setup Android Scaffolding and Permissions
         run: |
-          # 1. Remove deleted v1 embedding packages if present
-          sed -i '/telephony/d' pubspec.yaml
-
-          # 2. Recreate clean Android v2 embedding structure
+          # 1. Recreate clean Android scaffolding
           rm -rf android
           flutter create --platforms=android --org=com.example .
 
-          # 3. Configure minSdkVersion 23 for local_auth & geolocator
+          # 2. Configure FlutterFragmentActivity for local_auth (biometrics)
+          find android -name "MainActivity.kt" -exec sed -i 's/FlutterActivity/FlutterFragmentActivity/g' {} +
+          find android -name "MainActivity.kt" -exec sed -i 's/import io.flutter.embedding.android.FlutterActivity/import io.flutter.embedding.android.FlutterFragmentActivity/g' {} +
+
+          # 3. Set minSdkVersion to 23 for biometric & geolocator compatibility
+          find android -name "build.gradle" -exec sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' {} +
+          find android -name "build.gradle.kts" -exec sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' {} +
           echo "flutter.minSdkVersion=23" >> android/local.properties
 
-          # 4. Inject required emergency permissions into AndroidManifest
+          # 4. Inject Emergency and Biometric permissions into AndroidManifest.xml
           sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>\n    <uses-permission android:name="android.permission.SEND_SMS" \/>\n    <uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="android.permission.CALL_PHONE" \/>\n    <uses-permission android:name="android.permission.USE_BIOMETRIC" \/>\n    <uses-permission android:name="android.permission.USE_FINGERPRINT" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
 
-      - name: Build Release APK
+      - name: Check Code and Build Release APK
         run: |
           flutter pub get
+          flutter analyze lib/ || true
           flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK Artifact
