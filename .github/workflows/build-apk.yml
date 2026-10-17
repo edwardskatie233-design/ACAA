@@ -24,6 +24,13 @@ jobs:
         with:
           channel: stable
 
+      - name: Sanitize Mobile Paste & Fix Encoding
+        run: |
+          # Fix hidden non-breaking spaces (U+00A0) frequently inserted by phone copy-paste
+          sed -i 's/\xc2\xa0/ /g' lib/main.dart 2>/dev/null || true
+          # Remove DOS carriage returns if any
+          sed -i 's/\r$//' lib/main.dart 2>/dev/null || true
+
       - name: Setup Android Scaffolding and Permissions
         run: |
           # 1. Recreate clean Android scaffolding
@@ -42,11 +49,14 @@ jobs:
           # 4. Inject Emergency and Biometric permissions into AndroidManifest.xml
           sed -i 's/<application/<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" \/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" \/>\n    <uses-permission android:name="android.permission.SEND_SMS" \/>\n    <uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="android.permission.CALL_PHONE" \/>\n    <uses-permission android:name="android.permission.USE_BIOMETRIC" \/>\n    <uses-permission android:name="android.permission.USE_FINGERPRINT" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
 
-      - name: Check Code and Build Release APK
+      - name: Validate Dependencies and Code
         run: |
           flutter pub get
-          flutter analyze lib/ || true
-          flutter build apk --release --no-tree-shake-icons
+          flutter analyze --no-fatal-infos lib/main.dart
+
+      - name: Build Release APK
+        run: |
+          flutter build apk --release --no-tree-shake-icons --verbose
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
